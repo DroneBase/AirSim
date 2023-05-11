@@ -372,6 +372,7 @@ private:
     std::vector<std::tuple<std::string, std::string, GimbalStatePublisher>> gimbal_state_pub_vec_;
     std::string gimbal_vehicle_reference_camera_name_;
 
+    double normalize(const double value, const double start, const double end);
     static constexpr char CAM_YML_NAME[] = "camera_name";
     static constexpr char WIDTH_YML_NAME[] = "image_width";
     static constexpr char HEIGHT_YML_NAME[] = "image_height";

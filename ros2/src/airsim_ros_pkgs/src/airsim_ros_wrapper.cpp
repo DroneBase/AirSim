@@ -972,6 +972,8 @@ void AirsimROSWrapper::gimbal_state_timer_cb()
         // Calculate "vehicle relative" yaw of the gimbaled camera.
         message.yaw = math_common::rad2deg(gimbal_yaw) - math_common::rad2deg(vehicle_yaw);
 
+        RCLCPP_INFO(nh_->get_logger(), "Gimbal Yaw= %.2f Vehicle Yaw=%.2f", math_common::rad2deg(gimbal_yaw), math_common::rad2deg(vehicle_yaw));
+
         publisher->publish(message);
     }
 }
@@ -1469,4 +1471,11 @@ void AirsimROSWrapper::read_params_from_yaml_and_fill_cam_info_msg(const std::st
     for (int i = 0; i < D_rows * D_cols; ++i) {
         cam_info.d[i] = D_data[i].as<float>();
     }
+}
+// stolen from https://stackoverflow.com/questions/1628386/normalise-orientation-between-0-and-360
+double AirsimROSWrapper::normalize(const double value, const double start, const double end)
+{
+    const double width = end - start;
+    const double offsetValue = value - start;
+    return (offsetValue - (floor(offsetValue / width) * width)) + start;
 }
