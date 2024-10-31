@@ -22,3 +22,14 @@ Alternatively:
 ```
 ./run.sh -b
 ```
+
+## ZV2 metadata
+To publish jpegs with ZV2 metadata:
+```
+./run.sh -z
+```
+
+Alternatively:
+```
+./run.sh --zv2_metadata
+```
