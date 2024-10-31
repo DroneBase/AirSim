@@ -1384,7 +1384,13 @@ std::shared_ptr<sensor_msgs::msg::CompressedImage> AirsimROSWrapper::get_jpeg_ms
         if (cv::imencode(".jpg", cv_ptr->image, jpeg_message->data, params)) {
             image_metadata::Image image(jpeg_message->data.data(), jpeg_message->data.size());
             image_metadata::Metadata metadata{0.1, {1, 2, 3}, {1,2,3}, 0.1, {1,2,3}, 0, 0.1, 0.1, "mission", 14, 10, 20, 0.1, 10.1, 20, {1,2,3}, 40, {1,2,3}, 10, 20, 0.1, std::chrono::system_clock::now(), 0.1};
-            image.update(metadata);
+
+            try {
+                image.update(metadata);
+            } catch (const Exiv2::Error& exception) {
+                RCLCPP_ERROR(nh_->get_logger(), "Exiv2 image metadata update failed: %s", exception.what());
+            }
+
             image.output(jpeg_message->data);
         } else {
             RCLCPP_ERROR(nh_->get_logger(), "cv::imencode conversion to jpeg failed");
