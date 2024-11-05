@@ -238,10 +238,14 @@ private:
     /// camera helper methods
     sensor_msgs::msg::CameraInfo generate_cam_info(const std::string& camera_name, const CameraSetting& camera_setting, const CaptureSetting& capture_setting) const;
 
+    std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> get_gimbal_msg_from_camera(const std::string& vehicle_name, const std::string& camera_name);
+    std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> get_camera_attitude_euler_msg(const std::string& vehicle_name, const std::string& camera_name);
+
     std::shared_ptr<sensor_msgs::msg::Image> get_img_msg_from_response(const ImageResponse& img_response, const rclcpp::Time curr_ros_time, const std::string frame_id);
     std::shared_ptr<sensor_msgs::msg::Image> get_depth_img_msg_from_response(const ImageResponse& img_response, const rclcpp::Time curr_ros_time, const std::string frame_id);
     std::shared_ptr<sensor_msgs::msg::CompressedImage> get_jpeg_msg_from_img_msg(
         std::shared_ptr<sensor_msgs::msg::Image> image_message);
+    std::shared_ptr<image_metadata::Metadata> get_jpeg_msg_metadata();
 
     void process_and_publish_img_response(const std::vector<ImageResponse>& img_response_vec, const int img_response_idx, const std::string& vehicle_name);
 

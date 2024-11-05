@@ -580,6 +580,7 @@ void AirsimROSWrapper::vel_cmd_all_world_frame_cb(const airsim_interfaces::msg::
 // todo support multiple gimbal commands
 void AirsimROSWrapper::gimbal_angle_quat_cmd_cb(const airsim_interfaces::msg::GimbalAngleQuatCmd::SharedPtr gimbal_angle_quat_cmd_msg)
 {
+    RCLCPP_INFO(nh_->get_logger(), "gimbal_angle_quat_cmd_cb");
     tf2::Quaternion quat_control_cmd;
     try {
         tf2::convert(gimbal_angle_quat_cmd_msg->orientation, quat_control_cmd);
@@ -600,6 +601,7 @@ void AirsimROSWrapper::gimbal_angle_quat_cmd_cb(const airsim_interfaces::msg::Gi
 // 3. call airsim client's setCameraPose which sets camera pose wrt world (or takeoff?) ned frame. todo
 void AirsimROSWrapper::gimbal_angle_euler_cmd_cb(const airsim_interfaces::msg::GimbalAngleEulerCmd::SharedPtr gimbal_angle_euler_cmd_msg)
 {
+    RCLCPP_INFO(nh_->get_logger(), "gimbal_angle_euler_cmd_cb");
     try {
         tf2::Quaternion quat_control_cmd;
         quat_control_cmd.setRPY(math_common::deg2rad(gimbal_angle_euler_cmd_msg->roll), math_common::deg2rad(gimbal_angle_euler_cmd_msg->pitch), math_common::deg2rad(gimbal_angle_euler_cmd_msg->yaw));
@@ -968,24 +970,7 @@ void AirsimROSWrapper::gimbal_state_timer_cb()
         std::string camera_name = std::get<1>(gimbal_state_pub_tuple);
         GimbalStatePublisher publisher = std::get<2>(gimbal_state_pub_tuple);
 
-        // Get the RPY orientation of a designated fixed camera (i.e. the vehicle orientation).
-        msr::airlib::CameraInfo vehicle_camera_info = airsim_client_->simGetCameraInfo(gimbal_vehicle_reference_camera_name_, vehicle_name);
-        double vehicle_roll, vehicle_pitch, vehicle_yaw;
-        tf2::Matrix3x3(get_tf2_quat(vehicle_camera_info.pose.orientation)).getRPY(vehicle_roll, vehicle_pitch, vehicle_yaw);
-
-        // Get the RPY orientation of the gimbaled camera.    
-        msr::airlib::CameraInfo gimbal_camera_info = airsim_client_->simGetCameraInfo(camera_name, vehicle_name);
-        double gimbal_roll, gimbal_pitch, gimbal_yaw;
-        tf2::Matrix3x3(get_tf2_quat(gimbal_camera_info.pose.orientation)).getRPY(gimbal_roll, gimbal_pitch, gimbal_yaw);
-
-        auto message = airsim_interfaces::msg::GimbalAngleEulerCmd();
-        message.header.stamp = nh_->get_clock()->now();
-        message.roll = math_common::rad2deg(gimbal_roll);
-        message.pitch = math_common::rad2deg(gimbal_pitch);
-        // Calculate "vehicle relative" yaw of the gimbaled camera.
-        message.yaw = math_common::rad2deg(gimbal_yaw) - math_common::rad2deg(vehicle_yaw);
-
-        publisher->publish(message);
+        publisher->publish(*get_gimbal_msg_from_camera(vehicle_name, camera_name));
     }
 }
 
@@ -1155,12 +1140,15 @@ void AirsimROSWrapper::update_commands()
 
     // Set gimbal/camera position and pose.
     if (has_gimbal_cmd_) {
+        RCLCPP_INFO(nh_->get_logger(), "has_gimbal_cmd_ is true");
         std::lock_guard<std::mutex> guard(control_mutex_);
 
         // Look for camera poses from settings with the same camera name as the gimbal command.
         // Use the settings to set gimbal/camera position and pose.
         for (auto &camera_position_pair : camera_position_vec_) {
             std::string camera_name = camera_position_pair.first;
+            RCLCPP_INFO(nh_->get_logger(), "has_gimbal_cmd camera_name: %s, gimbal_cmd_.camera_name: %s",
+                camera_name.c_str(), gimbal_cmd_.camera_name.c_str());
             if (camera_name == gimbal_cmd_.camera_name) {
                 msr::airlib::Vector3r camera_position = camera_position_pair.second;
                 airsim_client_->simSetCameraPose(gimbal_cmd_.camera_name,
@@ -1328,6 +1316,42 @@ void AirsimROSWrapper::lidar_timer_cb()
     }
 }
 
+std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> AirsimROSWrapper::get_gimbal_msg_from_camera(
+    const std::string& vehicle_name, const std::string& camera_name)
+{
+    auto vehicle_attitude = get_camera_attitude_euler_msg(vehicle_name, "front_center_fixed");
+    auto gimbal_attitude = get_camera_attitude_euler_msg(vehicle_name, camera_name);
+
+    auto message = std::make_shared<airsim_interfaces::msg::GimbalAngleEulerCmd>();
+    message->header.stamp = nh_->get_clock()->now();
+    message->roll = gimbal_attitude->roll;
+    message->pitch = gimbal_attitude->pitch;
+
+    // Calculate "vehicle relative" yaw of the gimbaled camera.
+    message->yaw = math_common::constrain_euler_angle_to_360(gimbal_attitude->yaw - vehicle_attitude->yaw);
+
+    return message;
+}
+
+std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> AirsimROSWrapper::get_camera_attitude_euler_msg(
+    const std::string& vehicle_name, const std::string& camera_name)
+{
+    auto message = std::make_shared<airsim_interfaces::msg::GimbalAngleEulerCmd>();
+    message->header.stamp = nh_->get_clock()->now();
+
+    // Get the RPY orientation of a designated fixed camera (i.e. the vehicle orientation).
+    msr::airlib::CameraInfo vehicle_camera_info = airsim_client_->simGetCameraInfo(camera_name, vehicle_name);
+    tf2::Matrix3x3(get_tf2_quat(vehicle_camera_info.pose.orientation)).getRPY(
+        message->roll, message->pitch, message->yaw);
+
+    // Convert from radians to degress.
+    message->roll = math_common::constrain_euler_angle_to_360(math_common::rad2deg(message->roll));
+    message->pitch = math_common::constrain_euler_angle_to_360(math_common::rad2deg(message->pitch));
+    message->yaw = math_common::constrain_euler_angle_to_360(math_common::rad2deg(message->yaw));
+
+    return message;
+}
+
 std::shared_ptr<sensor_msgs::msg::Image> AirsimROSWrapper::get_img_msg_from_response(const ImageResponse& img_response,
                                                                                      const rclcpp::Time curr_ros_time,
                                                                                      const std::string frame_id)
@@ -1368,6 +1392,8 @@ std::shared_ptr<sensor_msgs::msg::Image> AirsimROSWrapper::get_depth_img_msg_fro
 std::shared_ptr<sensor_msgs::msg::CompressedImage> AirsimROSWrapper::get_jpeg_msg_from_img_msg(
     std::shared_ptr<sensor_msgs::msg::Image> image_message)
 {
+    std::shared_ptr<image_metadata::Metadata> metadata = get_jpeg_msg_metadata();
+
     auto jpeg_message =
         std::make_shared<sensor_msgs::msg::CompressedImage>();
     jpeg_message->header.frame_id = image_message->header.frame_id;
@@ -1383,10 +1409,9 @@ std::shared_ptr<sensor_msgs::msg::CompressedImage> AirsimROSWrapper::get_jpeg_ms
         std::vector<int> params{cv::IMWRITE_JPEG_QUALITY, 100};
         if (cv::imencode(".jpg", cv_ptr->image, jpeg_message->data, params)) {
             image_metadata::Image image(jpeg_message->data.data(), jpeg_message->data.size());
-            image_metadata::Metadata metadata{0.1, {1, 2, 3}, {1,2,3}, 0.1, {1,2,3}, 0, 0.1, 0.1, "mission", 14, 10, 20, 0.1, 10.1, 20, {1,2,3}, 40, {1,2,3}, 10, 20, 0.1, std::chrono::system_clock::now(), 0.1};
 
             try {
-                image.update(metadata);
+                image.update(*metadata);
             } catch (const Exiv2::Error& exception) {
                 RCLCPP_ERROR(nh_->get_logger(), "Exiv2 image metadata update failed: %s", exception.what());
             }
@@ -1402,6 +1427,48 @@ std::shared_ptr<sensor_msgs::msg::CompressedImage> AirsimROSWrapper::get_jpeg_ms
     }
 
     return jpeg_message;
+}
+
+std::shared_ptr<image_metadata::Metadata> AirsimROSWrapper::get_jpeg_msg_metadata()
+{
+    std::string vehicle_name = "Copter";
+    auto height_data = airsim_client_->getDistanceSensorData("Distance1", vehicle_name);
+    auto distance_data = airsim_client_->getDistanceSensorData("Distance2", vehicle_name);
+    auto gps_data = airsim_client_->getGpsData("Gps", vehicle_name);
+
+    auto vehicle_attitude = get_camera_attitude_euler_msg(vehicle_name, "front_center_fixed");
+    auto gimbal_attitude = get_camera_attitude_euler_msg(vehicle_name, gimbal_vehicle_reference_camera_name_);
+
+    auto metadata = std::make_shared<image_metadata::Metadata>(
+        image_metadata::Metadata{
+            distance_data.distance, // rangefinder distance
+            {vehicle_attitude->roll, vehicle_attitude->pitch, vehicle_attitude->yaw}, // drone attitude
+            {gps_data.gnss.geo_point.latitude, gps_data.gnss.geo_point.longitude,
+                gps_data.gnss.geo_point.altitude - origin_geo_point_.altitude}, // drone gps
+            3., // fix state
+            {gimbal_attitude->roll, gimbal_attitude->pitch, gimbal_attitude->yaw}, // gimbal attitude
+            7000, // gps_counter
+            240., // horizontal_accuracy
+            48., // horizontal_dilution_precision
+            "mission", // mission ID
+            7, // num_glonass_satellites_used
+            11, // num_gps_satellites_used
+            30, // num_total_satellites_used
+            97.0, // position_dilution_precision
+            height_data.distance, // relative_height
+            1, // rtk_connection_status
+            {gps_data.gnss.geo_point.latitude, gps_data.gnss.geo_point.longitude,
+                gps_data.gnss.geo_point.altitude - origin_geo_point_.altitude}, // rtk_position
+            40, // rtk_position_info
+            {-0.326, -9.269, 152.085}, // rtk_velocity
+            10, // rtk_yaw
+            50, // rtk_yaw_info
+            9., // speed_accuracy
+            std::chrono::system_clock::now(), // time
+            390. // vertical_accuracy
+        }
+    );
+    return metadata;
 }
 
 // todo have a special stereo pair mode and get projection matrix by calculating offset wrt drone body frame?
