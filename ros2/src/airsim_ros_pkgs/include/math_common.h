@@ -46,9 +46,8 @@ inline T angular_dist(T from, T to)
 template <typename T>
 inline T constrain_euler_angle_to_360(const T angle)
 {
-    T angle_constrained = angle;
-    angle_constrained -= 360. * std::floor(angle_constrained * (1. / 360.));
-    return angle_constrained;
+    double angle_constrained = std::fmod(angle, 360.);
+    return angle_constrained < 0. ? angle_constrained + 360. : angle_constrained;
 }
 
 }
