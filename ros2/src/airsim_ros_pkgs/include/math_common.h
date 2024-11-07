@@ -42,4 +42,12 @@ inline T angular_dist(T from, T to)
         d += 2. * M_PI;
     return d;
 }
+
+template <typename T>
+inline T constrain_euler_angle_to_360(const T angle)
+{
+    double angle_constrained = std::fmod(angle, 360.);
+    return angle_constrained < 0. ? angle_constrained + 360. : angle_constrained;
+}
+
 }
