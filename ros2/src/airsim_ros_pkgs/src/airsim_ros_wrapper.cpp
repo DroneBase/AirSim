@@ -95,6 +95,10 @@ void AirsimROSWrapper::initialize_ros()
     // ros params
     double update_airsim_control_every_n_sec;
     double update_airsim_gimbal_every_n_sec;
+
+    nh_->get_parameter("debug", debug_);
+    RCLCPP_INFO(nh_->get_logger(), "debug mode is %s", debug_ ? "enabled" : "disabled");
+
     nh_->get_parameter("is_vulkan", is_vulkan_);
     nh_->get_parameter("gimbal_vehicle_reference_camera_name", gimbal_vehicle_reference_camera_name_);
     nh_->get_parameter("update_airsim_control_every_n_sec", update_airsim_control_every_n_sec);
@@ -111,11 +115,7 @@ void AirsimROSWrapper::initialize_ros()
     // nh_->get_parameter("max_horz_vel", max_horz_vel_)
 
     nh_->get_parameter("zv2_metadata", zv2_metadata_);
-    if (zv2_metadata_) {
-        RCLCPP_INFO(nh_->get_logger(), "ZV2 metadata is enabled");
-    } else {
-        RCLCPP_INFO(nh_->get_logger(), "ZV2 metadata is disabled");
-    }
+    RCLCPP_INFO(nh_->get_logger(), "ZV2 metadata is %s", zv2_metadata_ ? "enabled" : "disabled");
 
     nh_->declare_parameter("vehicle_name", rclcpp::ParameterValue(""));
     create_ros_pubs_from_settings_json();
@@ -845,6 +845,8 @@ void AirsimROSWrapper::publish_odom_tf(const nav_msgs::msg::Odometry& odom_msg)
     odom_tf.transform.translation.y = odom_msg.pose.pose.position.y;
     odom_tf.transform.translation.z = odom_msg.pose.pose.position.z;
     odom_tf.transform.rotation = odom_msg.pose.pose.orientation;
+    // RCLCPP_INFO(nh_->get_logger(), "publish_odom_tf frame_id: %s child_frame_id: %s",
+    //     odom_tf.transform.frame_id.c_str(), odom_tf.child_frame_id.c_str());
     tf_broadcaster_->sendTransform(odom_tf);
 }
 
@@ -1147,8 +1149,6 @@ void AirsimROSWrapper::update_commands()
         // Use the settings to set gimbal/camera position and pose.
         for (auto &camera_position_pair : camera_position_vec_) {
             std::string camera_name = camera_position_pair.first;
-            RCLCPP_INFO(nh_->get_logger(), "has_gimbal_cmd camera_name: %s, gimbal_cmd_.camera_name: %s",
-                camera_name.c_str(), gimbal_cmd_.camera_name.c_str());
             if (camera_name == gimbal_cmd_.camera_name) {
                 msr::airlib::Vector3r camera_position = camera_position_pair.second;
                 airsim_client_->simSetCameraPose(gimbal_cmd_.camera_name,
@@ -1319,30 +1319,39 @@ void AirsimROSWrapper::lidar_timer_cb()
 std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> AirsimROSWrapper::get_gimbal_msg_from_camera(
     const std::string& vehicle_name, const std::string& camera_name)
 {
-    auto vehicle_attitude = get_camera_attitude_euler_msg(vehicle_name, "front_center_fixed");
-    auto gimbal_attitude = get_camera_attitude_euler_msg(vehicle_name, camera_name);
+    auto vehicle_pose = get_camera_pose(vehicle_name, gimbal_vehicle_reference_camera_name_);
+    auto vehicle_attitude_euler = get_camera_attitude_euler_msg(vehicle_pose);
+
+    auto gimbal_pose = get_camera_pose(vehicle_name, camera_name);
+    auto gimbal_attitude_euler = get_camera_attitude_euler_msg(gimbal_pose);
 
     auto message = std::make_shared<airsim_interfaces::msg::GimbalAngleEulerCmd>();
     message->header.stamp = nh_->get_clock()->now();
-    message->roll = gimbal_attitude->roll;
-    message->pitch = gimbal_attitude->pitch;
+    message->roll = gimbal_attitude_euler->roll;
+    message->pitch = gimbal_attitude_euler->pitch;
 
     // Calculate "vehicle relative" yaw of the gimbaled camera.
-    message->yaw = math_common::constrain_euler_angle_to_360(gimbal_attitude->yaw - vehicle_attitude->yaw);
+    message->yaw = math_common::constrain_euler_angle_to_360(
+        vehicle_attitude_euler->yaw - gimbal_attitude_euler->yaw);
 
     return message;
 }
 
+msr::airlib::Pose AirsimROSWrapper::get_camera_pose(const std::string& vehicle_name,
+    const std::string& camera_name)
+{
+    msr::airlib::CameraInfo vehicle_camera_info = airsim_client_->simGetCameraInfo(camera_name, vehicle_name);
+    return vehicle_camera_info.pose;
+}
+
 std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> AirsimROSWrapper::get_camera_attitude_euler_msg(
-    const std::string& vehicle_name, const std::string& camera_name)
+    const msr::airlib::Pose& camera_pose)
 {
     auto message = std::make_shared<airsim_interfaces::msg::GimbalAngleEulerCmd>();
     message->header.stamp = nh_->get_clock()->now();
 
     // Get the RPY orientation of a designated fixed camera (i.e. the vehicle orientation).
-    msr::airlib::CameraInfo vehicle_camera_info = airsim_client_->simGetCameraInfo(camera_name, vehicle_name);
-    tf2::Matrix3x3(get_tf2_quat(vehicle_camera_info.pose.orientation)).getRPY(
-        message->roll, message->pitch, message->yaw);
+    tf2::Matrix3x3(get_tf2_quat(camera_pose.orientation)).getRPY(message->roll, message->pitch, message->yaw);
 
     // Convert from radians to degress.
     message->roll = math_common::constrain_euler_angle_to_360(math_common::rad2deg(message->roll));
@@ -1390,9 +1399,9 @@ std::shared_ptr<sensor_msgs::msg::Image> AirsimROSWrapper::get_depth_img_msg_fro
 }
 
 std::shared_ptr<sensor_msgs::msg::CompressedImage> AirsimROSWrapper::get_jpeg_msg_from_img_msg(
-    std::shared_ptr<sensor_msgs::msg::Image> image_message)
+    const ImageResponse& image_response, std::shared_ptr<sensor_msgs::msg::Image> image_message)
 {
-    std::shared_ptr<image_metadata::Metadata> metadata = get_jpeg_msg_metadata();
+    std::shared_ptr<image_metadata::Metadata> metadata = get_jpeg_msg_metadata(image_response);
 
     auto jpeg_message =
         std::make_shared<sensor_msgs::msg::CompressedImage>();
@@ -1429,24 +1438,75 @@ std::shared_ptr<sensor_msgs::msg::CompressedImage> AirsimROSWrapper::get_jpeg_ms
     return jpeg_message;
 }
 
-std::shared_ptr<image_metadata::Metadata> AirsimROSWrapper::get_jpeg_msg_metadata()
+std::shared_ptr<image_metadata::Metadata> AirsimROSWrapper::get_jpeg_msg_metadata(
+    const ImageResponse& image_response)
 {
     std::string vehicle_name = "Copter";
     auto height_data = airsim_client_->getDistanceSensorData("Distance1", vehicle_name);
     auto distance_data = airsim_client_->getDistanceSensorData("Distance2", vehicle_name);
     auto gps_data = airsim_client_->getGpsData("Gps", vehicle_name);
 
-    auto vehicle_attitude = get_camera_attitude_euler_msg(vehicle_name, "front_center_fixed");
-    auto gimbal_attitude = get_camera_attitude_euler_msg(vehicle_name, gimbal_vehicle_reference_camera_name_);
+    auto fixed_pose = get_camera_pose(vehicle_name, gimbal_vehicle_reference_camera_name_);
+    auto fixed_attitude_euler = get_camera_attitude_euler_msg(fixed_pose);
+
+    auto camera_pose = get_camera_pose(vehicle_name, image_response.camera_name);
+    auto camera_attitude_euler = get_camera_attitude_euler_msg(camera_pose);
+
+    geometry_msgs::msg::Transform fixed_camera_setting_transform;
+    geometry_msgs::msg::Transform camera_setting_transform;
+    bool fixed_camera_setting_found = false;
+    bool camera_setting_found = false;
+    for (const auto& vehicle : AirSimSettings::singleton().vehicles) {
+        auto& vehicle_setting = vehicle.second;
+        set_nans_to_zeros_in_pose(*vehicle_setting);
+
+        for (auto& camera : vehicle_setting->cameras) {
+            auto& camera_name = camera.first;
+            auto& camera_setting = camera.second;
+
+            if (camera_name == gimbal_vehicle_reference_camera_name_) {
+                set_nans_to_zeros_in_pose(*vehicle_setting, camera_setting);
+                fixed_camera_setting_transform = get_transform_msg_from_airsim(camera_setting.position,
+                    camera_setting.rotation);
+                fixed_camera_setting_found = true;
+            }
+
+            if (camera_name == image_response.camera_name) {
+                set_nans_to_zeros_in_pose(*vehicle_setting, camera_setting);
+                camera_setting_transform = get_transform_msg_from_airsim(camera_setting.position,
+                    camera_setting.rotation);
+                camera_setting_found = true;
+            }
+        }
+    }
+
+    if (!fixed_camera_setting_found) {
+        throw std::runtime_error(std::string("Failed to find camera setting: ") +
+            gimbal_vehicle_reference_camera_name_.c_str());
+    }
+
+    if (!camera_setting_found) {
+        throw std::runtime_error(std::string("Failed to find camera setting: ") +
+            image_response.camera_name);
+    }
+
+    tf2::Quaternion fixed_pose_orientation(fixed_pose.orientation.x(),
+        fixed_pose.orientation.y(), fixed_pose.orientation.z(), fixed_pose.orientation.w());
+
+    tf2::Quaternion fixed_camera_setting_orientation(fixed_camera_setting_transform.rotation.x,
+        fixed_camera_setting_transform.rotation.y, fixed_camera_setting_transform.rotation.z,
+        fixed_camera_setting_transform.rotation.w);
+
+    tf2::Quaternion origin_to_vehicle_orientation = fixed_pose_orientation * fixed_camera_setting_orientation;
 
     auto metadata = std::make_shared<image_metadata::Metadata>(
         image_metadata::Metadata{
             distance_data.distance, // rangefinder distance
-            {vehicle_attitude->roll, vehicle_attitude->pitch, vehicle_attitude->yaw}, // drone attitude
+            {fixed_attitude_euler->roll, fixed_attitude_euler->pitch, fixed_attitude_euler->yaw}, // drone attitude
             {gps_data.gnss.geo_point.latitude, gps_data.gnss.geo_point.longitude,
                 gps_data.gnss.geo_point.altitude - origin_geo_point_.altitude}, // drone gps
             3., // fix state
-            {gimbal_attitude->roll, gimbal_attitude->pitch, gimbal_attitude->yaw}, // gimbal attitude
+            {camera_attitude_euler->roll, camera_attitude_euler->pitch, camera_attitude_euler->yaw}, // gimbal attitude
             7000, // gps_counter
             240., // horizontal_accuracy
             48., // horizontal_dilution_precision
@@ -1465,9 +1525,27 @@ std::shared_ptr<image_metadata::Metadata> AirsimROSWrapper::get_jpeg_msg_metadat
             50, // rtk_yaw_info
             9., // speed_accuracy
             std::chrono::system_clock::now(), // time
+            {
+                {fixed_pose.position.x() + fixed_camera_setting_transform.translation.x,
+                    fixed_pose.position.y() + fixed_camera_setting_transform.translation.y,
+                    fixed_pose.position.z() + fixed_camera_setting_transform.translation.z},
+                {origin_to_vehicle_orientation.x(), origin_to_vehicle_orientation.y(),
+                    origin_to_vehicle_orientation.z(), origin_to_vehicle_orientation.w()}
+            }, // tf_origin_to_vehicle
+            {
+                {camera_setting_transform.translation.x, camera_setting_transform.translation.y,
+                    camera_setting_transform.translation.z},
+                {camera_setting_transform.rotation.x, camera_setting_transform.rotation.y,
+                    camera_setting_transform.rotation.z, camera_setting_transform.rotation.w}
+            }, // tf_vehicle_to_camera
             390. // vertical_accuracy
         }
     );
+
+    if (debug_) {
+        RCLCPP_INFO(nh_->get_logger(), "Metadata: \n%s", image_metadata::to_string(metadata).c_str());
+    }
+
     return metadata;
 }
 
@@ -1522,9 +1600,13 @@ void AirsimROSWrapper::process_and_publish_img_response(const std::vector<ImageR
             image_pub_vec_[img_response_idx_internal].publish(image_message);
 
             if (zv2_metadata_) {
-                std::shared_ptr<sensor_msgs::msg::CompressedImage> jpeg_message =
-                    get_jpeg_msg_from_img_msg(image_message);
-                jpeg_pub_vec_[img_response_idx_internal]->publish(*jpeg_message);
+                try {
+                    std::shared_ptr<sensor_msgs::msg::CompressedImage> jpeg_message =
+                        get_jpeg_msg_from_img_msg(curr_img_response, image_message);
+                    jpeg_pub_vec_[img_response_idx_internal]->publish(*jpeg_message);
+                } catch (std::exception& exception) {
+                    RCLCPP_ERROR(nh_->get_logger(), "Error publishing jpeg: %s", exception.what());
+                }
             }
         }
         img_response_idx_internal++;

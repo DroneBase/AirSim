@@ -39,6 +39,8 @@ public:
         , _rtk_yaw_info(0)
         , _speed_accuracy(0.)
         , _time()
+        , _tf_origin_to_vehicle()
+        , _tf_vehicle_to_camera()
         , _vertical_accuracy(0.)
     {
     }
@@ -66,6 +68,8 @@ public:
         const int rtk_yaw_info,
         const float speed_accuracy,
         const std::chrono::system_clock::time_point time,
+        const std::pair<std::vector<float>, std::vector<float>> tf_origin_to_vehicle,
+        const std::pair<std::vector<float>, std::vector<float>> tf_vehicle_to_camera,
         const float vertical_accuracy
     )
         : _rangefinder_distance(rangefinder_distance)
@@ -90,6 +94,8 @@ public:
         , _rtk_yaw_info(rtk_yaw_info)
         , _speed_accuracy(speed_accuracy)
         , _time(time)
+        , _tf_origin_to_vehicle(tf_origin_to_vehicle)
+        , _tf_vehicle_to_camera(tf_vehicle_to_camera)
         , _vertical_accuracy(vertical_accuracy)
     {
     }
@@ -259,6 +265,76 @@ public:
         return _time;
     }
 
+    const std::string tfOriginToVehicleTranslationX() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.first.at(0)), 6);
+    }
+
+    const std::string tfOriginToVehicleTranslationY() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.first.at(1)), 6);
+    }
+
+    const std::string tfOriginToVehicleTranslationZ() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.first.at(2)), 6);
+    }
+
+    const std::string tfOriginToVehicleRotationX() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.second.at(0)), 6);
+    }
+
+    const std::string tfOriginToVehicleRotationY() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.second.at(1)), 6);
+    }
+
+    const std::string tfOriginToVehicleRotationZ() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.second.at(2)), 6);
+    }
+
+    const std::string tfOriginToVehicleRotationW() const
+    {
+        return double_to_str(static_cast<double>(_tf_origin_to_vehicle.second.at(3)), 6);
+    }
+
+    const std::string tfVehicleToCameraTranslationX() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.first.at(0)), 6);
+    }
+
+    const std::string tfVehicleToCameraTranslationY() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.first.at(1)), 6);
+    }
+
+    const std::string tfVehicleToCameraTranslationZ() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.first.at(2)), 6);
+    }
+
+    const std::string tfVehicleToCameraRotationX() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.second.at(0)), 6);
+    }
+
+    const std::string tfVehicleToCameraRotationY() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.second.at(1)), 6);
+    }
+
+    const std::string tfVehicleToCameraRotationZ() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.second.at(2)), 6);
+    }
+
+    const std::string tfVehicleToCameraRotationW() const
+    {
+        return double_to_str(static_cast<double>(_tf_vehicle_to_camera.second.at(3)), 6);
+    }
+
     const std::string verticalAccuracy() const
     {
         return double_to_str(static_cast<double>(_vertical_accuracy), 6);
@@ -308,6 +384,10 @@ private:
     const float _speed_accuracy;
 
     const std::chrono::system_clock::time_point _time;
+
+    const std::pair<std::vector<float>, std::vector<float>> _tf_origin_to_vehicle;
+
+    const std::pair<std::vector<float>, std::vector<float>> _tf_vehicle_to_camera;
 
     const float _vertical_accuracy;
 
@@ -416,8 +496,79 @@ private:
         xmp_data["Xmp.zv.NumGlonassSatellitesUsed"] = metadata.numGlonassSatellitesUsed();
         xmp_data["Xmp.zv.NumTotalSatellitesUsed"] = metadata.numTotalSatellitesUsed();
         xmp_data["Xmp.zv.GpsCounter"] = metadata.gpsCounter();
+
+        xmp_data["Xmp.zv.TFOriginToVehicleTranslationX"] = metadata.tfOriginToVehicleTranslationX();
+        xmp_data["Xmp.zv.TFOriginToVehicleTranslationY"] = metadata.tfOriginToVehicleTranslationY();
+        xmp_data["Xmp.zv.TFOriginToVehicleTranslationZ"] = metadata.tfOriginToVehicleTranslationZ();
+        xmp_data["Xmp.zv.TFOriginToVehicleRotationX"] = metadata.tfOriginToVehicleRotationX();
+        xmp_data["Xmp.zv.TFOriginToVehicleRotationY"] = metadata.tfOriginToVehicleRotationY();
+        xmp_data["Xmp.zv.TFOriginToVehicleRotationZ"] = metadata.tfOriginToVehicleRotationZ();
+        xmp_data["Xmp.zv.TFOriginToVehicleRotationW"] = metadata.tfOriginToVehicleRotationW();
+
+        xmp_data["Xmp.zv.TFVehicleToCameraTranslationX"] = metadata.tfVehicleToCameraTranslationX();
+        xmp_data["Xmp.zv.TFVehicleToCameraTranslationY"] = metadata.tfVehicleToCameraTranslationY();
+        xmp_data["Xmp.zv.TFVehicleToCameraTranslationZ"] = metadata.tfVehicleToCameraTranslationZ();
+        xmp_data["Xmp.zv.TFVehicleToCameraRotationX"] = metadata.tfVehicleToCameraRotationX();
+        xmp_data["Xmp.zv.TFVehicleToCameraRotationY"] = metadata.tfVehicleToCameraRotationY();
+        xmp_data["Xmp.zv.TFVehicleToCameraRotationZ"] = metadata.tfVehicleToCameraRotationZ();
+        xmp_data["Xmp.zv.TFVehicleToCameraRotationW"] = metadata.tfVehicleToCameraRotationW();
     }
 };
+
+inline const std::string to_string(std::shared_ptr<Metadata> metadata, bool collapse=true)
+{
+    std::string divider = collapse ? " " : "\n";
+    std::string metadata_string;
+    metadata_string += fmt::format("rangefinderDistance: {:.9f}{}", metadata->rangefinderDistance(), divider);
+    metadata_string += fmt::format("droneAttitudePitch: {:.9f}{}", metadata->droneAttitudePitch(), divider);
+    metadata_string += fmt::format("droneAttitudeRoll: {:.9f}{}", metadata->droneAttitudeRoll(), divider);
+    metadata_string += fmt::format("droneAttitudeYaw: {:.9f}{}", metadata->droneAttitudeYaw(), divider);
+    metadata_string += fmt::format("droneGpsAltitude: {}{}", metadata->droneGpsAltitude(), divider);
+    metadata_string += fmt::format("droneGpsLatitude: {}{}", metadata->droneGpsLatitude(), divider);
+    metadata_string += fmt::format("droneGpsLongitude: {}{}", metadata->droneGpsLongitude(), divider);
+    metadata_string += fmt::format("fixState: {}{}", metadata->fixState(), divider);
+    metadata_string += fmt::format("gimbalAttitudePitch: {:.9f}{}", metadata->gimbalAttitudePitch(), divider);
+    metadata_string += fmt::format("gimbalAttitudeRoll: {:.9f}{}", metadata->gimbalAttitudeRoll(), divider);
+    metadata_string += fmt::format("gimbalAttitudeYaw: {:.9f}{}", metadata->gimbalAttitudeYaw(), divider);
+    metadata_string += fmt::format("gpsCounter: {:d}{}", metadata->gpsCounter(), divider);
+    metadata_string += fmt::format("horizontalAccuracy: {}{}", metadata->horizontalAccuracy(), divider);
+    metadata_string += fmt::format("horizontalDilutionPrecision: {}{}", metadata->horizontalDilutionPrecision(), divider);
+    metadata_string += fmt::format("horizontalDilutionPrecision: {}{}", metadata->horizontalDilutionPrecision(), divider);
+    metadata_string += fmt::format("missionId: {}{}", metadata->missionId(), divider);
+    metadata_string += fmt::format("numGlonassSatellitesUsed: {:d}{}", metadata->numGlonassSatellitesUsed(), divider);
+    metadata_string += fmt::format("numGpsSatellitesUsed: {:d}{}", metadata->numGpsSatellitesUsed(), divider);
+    metadata_string += fmt::format("numTotalSatellitesUsed: {:d}{}", metadata->numTotalSatellitesUsed(), divider);
+    metadata_string += fmt::format("positionDilutionPrecision: {}{}", metadata->positionDilutionPrecision(), divider);
+    metadata_string += fmt::format("relativeHeight: {}{}", metadata->relativeHeight(), divider);
+    metadata_string += fmt::format("rtkConnectionStatus: {:d}{}", metadata->rtkConnectionStatus(), divider);
+    metadata_string += fmt::format("rtkPositionAltitude: {}{}", metadata->rtkPositionAltitude(), divider);
+    metadata_string += fmt::format("rtkPositionLatitude: {}{}", metadata->rtkPositionLatitude(), divider);
+    metadata_string += fmt::format("rtkPositionLongitude: {}{}", metadata->rtkPositionLongitude(), divider);
+    metadata_string += fmt::format("rtkPositionInfo: {:d}{}", metadata->rtkPositionInfo(), divider);
+    metadata_string += fmt::format("rtkVelocityX: {}{}", metadata->rtkVelocityX(), divider);
+    metadata_string += fmt::format("rtkVelocityY: {}{}", metadata->rtkVelocityY(), divider);
+    metadata_string += fmt::format("rtkVelocityZ: {}{}", metadata->rtkVelocityZ(), divider);
+    metadata_string += fmt::format("rtkYaw: {:d}{}", metadata->rtkYaw(), divider);
+    metadata_string += fmt::format("rtkYawInfo: {:d}{}", metadata->rtkYawInfo(), divider);
+    metadata_string += fmt::format("speedAccuracy: {}{}", metadata->speedAccuracy(), divider);
+    metadata_string += fmt::format("time: {}{}", metadata->time(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleTranslationX: {}{}", metadata->tfOriginToVehicleTranslationX(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleTranslationY: {}{}", metadata->tfOriginToVehicleTranslationY(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleTranslationZ: {}{}", metadata->tfOriginToVehicleTranslationZ(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleRotationX: {}{}", metadata->tfOriginToVehicleRotationX(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleRotationY: {}{}", metadata->tfOriginToVehicleRotationY(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleRotationZ: {}{}", metadata->tfOriginToVehicleRotationZ(), divider);
+    metadata_string += fmt::format("tfOriginToVehicleRotationW: {}{}", metadata->tfOriginToVehicleRotationW(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraTranslationX: {}{}", metadata->tfVehicleToCameraTranslationX(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraTranslationY: {}{}", metadata->tfVehicleToCameraTranslationY(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraTranslationZ: {}{}", metadata->tfVehicleToCameraTranslationZ(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraRotationX: {}{}", metadata->tfVehicleToCameraRotationX(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraRotationY: {}{}", metadata->tfVehicleToCameraRotationY(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraRotationZ: {}{}", metadata->tfVehicleToCameraRotationZ(), divider);
+    metadata_string += fmt::format("tfVehicleToCameraRotationW: {}{}", metadata->tfVehicleToCameraRotationW(), divider);
+    metadata_string += fmt::format("verticalAccuracy: {}{}", metadata->verticalAccuracy(), divider);
+    return metadata_string;
+}
 
 } // namespace image_metadata
 

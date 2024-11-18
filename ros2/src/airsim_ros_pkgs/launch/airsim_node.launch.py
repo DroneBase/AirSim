@@ -11,25 +11,17 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
 
-    output = DeclareLaunchArgument(
-        "output",
-        default_value='log')
+    debug = DeclareLaunchArgument("debug", default_value='False')
 
-    publish_clock = DeclareLaunchArgument(
-        "publish_clock",
-        default_value='False')
+    output = DeclareLaunchArgument("output", default_value='log')
 
-    is_vulkan = DeclareLaunchArgument(
-        "is_vulkan",
-        default_value='True')
+    publish_clock = DeclareLaunchArgument("publish_clock", default_value='False')
 
-    host = DeclareLaunchArgument(
-        "host",
-        default_value='localhost')
+    is_vulkan = DeclareLaunchArgument("is_vulkan", default_value='True')
 
-    zv2_metadata = DeclareLaunchArgument(
-        "zv2_metadata",
-        default_value="False")
+    host = DeclareLaunchArgument("host", default_value='localhost')
+
+    zv2_metadata = DeclareLaunchArgument("zv2_metadata", default_value="False")
   
     airsim_node = Node(
             package='airsim_ros_pkgs',
@@ -43,6 +35,7 @@ def generate_launch_description():
                 'update_airsim_control_every_n_sec': 0.01,
                 'update_airsim_gimbal_every_n_sec': 0.01,
                 'update_lidar_every_n_sec': 0.01,
+                'debug': LaunchConfiguration('debug'),
                 'publish_clock': LaunchConfiguration('publish_clock'),
                 'host_ip': LaunchConfiguration('host'),
                 'zv2_metadata': LaunchConfiguration('zv2_metadata')
@@ -60,6 +53,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     # Declare the launch options
+    ld.add_action(debug)
     ld.add_action(output)
     ld.add_action(publish_clock)
     ld.add_action(is_vulkan)
