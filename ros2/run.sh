@@ -7,6 +7,8 @@ SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 BUILD="false"
 IMAGE_NAME="airsim-ros2"
 CONTAINER_NAME="airsim-ros2"
+
+DEBUG="false"
 ZV2_METADATA="false"
 
 
@@ -24,11 +26,14 @@ function parse_args() {
 
     source_getopts_long
 
-    while getopts_long "bz build zv2_metadata" option "${@}"; do
+    while getopts_long "bdz build debug zv2_metadata" option "${@}"; do
         echo "option: ${option}"
         case "${option}" in
             "b" | "build")  
                 BUILD="true"
+                ;;
+            "d" | "debug")
+                DEBUG="true"
                 ;;
             "z" | "zv2_metadata")
                 ZV2_METADATA="true"
@@ -77,8 +82,12 @@ function run_airsim() {
     DOCKER_RUN_COMMAND+=(--network host)
     DOCKER_RUN_COMMAND+=("${IMAGE_NAME}")
 
+    if [ "${DEBUG}" == "true" ]; then
+        DOCKER_RUN_COMMAND+=("--debug")
+    fi
+
     if [ "${ZV2_METADATA}" == "true" ]; then
-        DOCKER_RUN_COMMAND+=("zv2_metadata")
+        DOCKER_RUN_COMMAND+=("--zv2_metadata")
     fi
 
     "${DOCKER_RUN_COMMAND[@]}"

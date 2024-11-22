@@ -239,13 +239,15 @@ private:
     sensor_msgs::msg::CameraInfo generate_cam_info(const std::string& camera_name, const CameraSetting& camera_setting, const CaptureSetting& capture_setting) const;
 
     std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> get_gimbal_msg_from_camera(const std::string& vehicle_name, const std::string& camera_name);
-    std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> get_camera_attitude_euler_msg(const std::string& vehicle_name, const std::string& camera_name);
+    msr::airlib::Pose get_camera_pose(const std::string& vehicle_name, const std::string& camera_name);
+    std::shared_ptr<airsim_interfaces::msg::GimbalAngleEulerCmd> get_camera_attitude_euler_msg(
+        const msr::airlib::Pose& camera_pose);
 
     std::shared_ptr<sensor_msgs::msg::Image> get_img_msg_from_response(const ImageResponse& img_response, const rclcpp::Time curr_ros_time, const std::string frame_id);
     std::shared_ptr<sensor_msgs::msg::Image> get_depth_img_msg_from_response(const ImageResponse& img_response, const rclcpp::Time curr_ros_time, const std::string frame_id);
     std::shared_ptr<sensor_msgs::msg::CompressedImage> get_jpeg_msg_from_img_msg(
-        std::shared_ptr<sensor_msgs::msg::Image> image_message);
-    std::shared_ptr<image_metadata::Metadata> get_jpeg_msg_metadata();
+        const ImageResponse& image_response, std::shared_ptr<sensor_msgs::msg::Image> image_message);
+    std::shared_ptr<image_metadata::Metadata> get_jpeg_msg_metadata(const ImageResponse& image_response);
 
     void process_and_publish_img_response(const std::vector<ImageResponse>& img_response_vec, const int img_response_idx, const std::string& vehicle_name);
 
@@ -293,6 +295,8 @@ private:
                                                      SensorBase::SensorType sensor_type, const std::string& topic_name, int QoS);
 
 private:
+    bool debug_;
+
     // subscriber / services for ALL robots
     rclcpp::Subscription<airsim_interfaces::msg::VelCmd>::SharedPtr vel_cmd_all_body_frame_sub_;
     rclcpp::Subscription<airsim_interfaces::msg::VelCmd>::SharedPtr vel_cmd_all_world_frame_sub_;
