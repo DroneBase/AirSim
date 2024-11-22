@@ -845,8 +845,6 @@ void AirsimROSWrapper::publish_odom_tf(const nav_msgs::msg::Odometry& odom_msg)
     odom_tf.transform.translation.y = odom_msg.pose.pose.position.y;
     odom_tf.transform.translation.z = odom_msg.pose.pose.position.z;
     odom_tf.transform.rotation = odom_msg.pose.pose.orientation;
-    // RCLCPP_INFO(nh_->get_logger(), "publish_odom_tf frame_id: %s child_frame_id: %s",
-    //     odom_tf.transform.frame_id.c_str(), odom_tf.child_frame_id.c_str());
     tf_broadcaster_->sendTransform(odom_tf);
 }
 
