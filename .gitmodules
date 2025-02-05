@@ -1,0 +1,3 @@
+[submodule "ros2/src/airsim_ros_pkgs/include/image_metadata"]
+	path = ros2/src/airsim_ros_pkgs/include/image_metadata
+	url = git@github.com:DroneBase/image_metadata.git
