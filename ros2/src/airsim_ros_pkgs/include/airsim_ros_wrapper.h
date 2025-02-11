@@ -64,7 +64,7 @@ STRICT_MODE_OFF //todo what does this do?
 #include <unordered_map>
 #include <memory>
 
-#include <image_metadata.hpp>
+#include "image_metadata/image_metadata.hpp"
 
     struct SimpleMatrix
 {
